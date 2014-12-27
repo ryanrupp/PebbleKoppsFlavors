@@ -17,49 +17,37 @@ ajax(
   },
   function(data) {
     var dateRegex = /<h5>(.*?\d{1,2}\/\d{1,2})<\/h5>/g;
+    var flavorsRegex = /<h3>(.*?)<\/h3>(\n|\s)+?<p>(.*?)<\/p>/g;
     var dates = [];
     var match = dateRegex.exec(data);
+    var flavorData = [];
     while (match !== null) {
         dates.push(match[1]);
         match = dateRegex.exec(data);
     }
-
     console.log("Dates: " + dates.join("\n"));
-    var flavorsRegex = /<h3>(.*?)<\/h3>/g;
-    var flavors = [];
-    match = flavorsRegex.exec(data);
-    while (match !== null) {
-        flavors.push(match[1]);
-        match = flavorsRegex.exec(data);
-    }
-    console.log("Flavors: " + flavors.join("\n"));
     
-    var combined = [];
-    var flavorIndex = 0;
-    for (var index = 0; index < dates.length; index++) {
-      if (index + 1 === dates.length) {
-        
+    for (var dateIndex = 0; dateIndex < dates.length; dateIndex++) {
+      var startLoc = data.search("<h5>" + dates[dateIndex] + "</h5>");
+      var endLoc = data.length;
+      if (dateIndex + 1 < dates.length) {
+        endLoc = data.search("<h5>" + dates[dateIndex + 1] + "</h5>");
       }
-      else {
-        var currentDateLoc = data.search(dates[index]);
-        var nextDateLoc = data.search(dates[index + 1]);
-        for (var flavorLoc = data.search(flavors[flavorIndex]);
-                nextDateLoc > flavorLoc;             
-                flavorLoc = data.search(flavors[++flavorIndex])) {
-             //searchFromIndex(data, currentDateLoc, nextDateLoc, flavors[++flavorIndex])
-             //
-            if (flavorLoc > currentDateLoc) {
-              combined.push({
-                date: dates[index],
-                flavor: decodeHtml(flavors[flavorIndex])
-              });
-            }
-        }
+      
+      var workingData = data.substring(startLoc, endLoc);
+      match = flavorsRegex.exec(workingData);
+      while (match !== null) {
+        console.log("Found flavor: " + match);
+        flavorData.push({
+          date: dates[dateIndex],
+          flavor: decodeHtml(match[1]),
+          description: decodeHtml(match[3])
+        });
+        match = flavorsRegex.exec(workingData);
       }
     }
     
-    console.log("Combined: " + combined.join("\n"));
-    flavorList = combined;
+    flavorList = flavorData;
   },
   function(error) {
     console.log('The ajax request failed: ' + error);
@@ -67,12 +55,21 @@ ajax(
 );
 
 var menu = new UI.Menu({
-  sections: [{
-    items: buildItems()
-  }]
+    sections: [{
+        title: "Kopp's Flavor Forecast",
+        items: buildItems()
+    }]
 });
 
 menu.on('select', function(e) {
+  var flavor = flavorList[e.itemIndex];
+  var card = new UI.Card({
+    title: flavor.date,
+    subtitle: flavor.flavor,
+    body: flavor.description,
+    scrollable: true
+  });
+  card.show();
   console.log('Selected item #' + e.itemIndex + ' of section #' + e.sectionIndex);
   console.log('The item is titled "' + e.item.title + '"');
 });
@@ -92,12 +89,9 @@ function buildItems() {
 }
 
 function decodeHtml(str) {
-    return str.replace(/&#([0-9]{1,3});/gi, function(match, numStr) {
+    var replaced = str.replace(/&#([0-9]{1,3});/gi, function(match, numStr) {
         var num = parseInt(numStr, 10); // read num as normal number
         return String.fromCharCode(num);
     });
-}
-
-function searchFromIndex(str, startIndex, endIndex, strToFind) {
-  return str.substring(startIndex, endIndex).search(strToFind);
+    return replaced.replace("&amp;", "&");
 }
